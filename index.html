@@ -322,7 +322,7 @@ tr.lopend-row td{opacity:.6;}
       <button class="btn-save" onclick="doSetup()">Verbinden &amp; starten</button>
       <button class="btn-sec" onclick="skipSetup()">Overslaan (lokaal)</button>
     </div>
-    <div id="setup-msg" style="font-size:12px;color:var(--green);margin-top:.65rem;min-height:1rem;"></div>
+    <div id="setup-msg" style="font-size:12px;color:var(--red);margin-top:.65rem;min-height:1rem;"></div>
   </div>
 </div>
 
@@ -376,9 +376,8 @@ tr.lopend-row td{opacity:.6;}
 <div class="toast" id="toast"></div>
 
 <script>
-// ─── FIXED GIST ID — both devices always use this ────────────
 const GIST_ID = '8d30de914a7c256425a086dd17e70dbe';
-const TOKEN_KEY = 'uren_gh_token'; // only token stored in localStorage
+const TOKEN_KEY = 'uren_gh_token';
 
 const PAL=['#1D9E75','#378ADD','#D85A30','#888780','#BA7517','#E24B4A','#7F77DD','#D4537E','#5DCAA5','#EF9F27'];
 const MNL=['','jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
@@ -389,11 +388,9 @@ let ACid=null,repMonth=null;
 let tRun=false,tIv=null,tSt=null,tSec=0;
 let pushTimer=null,pushing=false;
 
-// ─── TOKEN ───────────────────────────────────────────────────
 function getToken(){ return localStorage.getItem(TOKEN_KEY)||''; }
 function setToken(t){ localStorage.setItem(TOKEN_KEY,t); }
 
-// ─── SYNC STATUS ─────────────────────────────────────────────
 function ss(state,lbl){
   const d=document.getElementById('sync-dot');
   const l=document.getElementById('sync-lbl');
@@ -401,7 +398,6 @@ function ss(state,lbl){
   if(l) l.textContent=lbl||'';
 }
 
-// ─── GIST API ────────────────────────────────────────────────
 async function gistPush(){
   const token=getToken();
   if(!token){ss('','Lokaal');return;}
@@ -441,7 +437,7 @@ async function gistPull(){
 
 function schedulePush(){clearTimeout(pushTimer);pushTimer=setTimeout(()=>gistPush(),1500);}
 async function forcePush(){clearTimeout(pushTimer);await gistPush();toast('↑ Geüpload');}
-async function forcePull(){const ok=await gistPull();if(ok){refreshAll();toast('↓ Opgehaald');}}
+async function forcePull(){const ok=await gistPull();if(ok){refreshAll();toast('↓ Opgehaald');}else{toast('Ophalen mislukt — controleer verbinding');}}
 
 async function saveToken(){
   const t=document.getElementById('s-gh-token').value.trim();
@@ -454,17 +450,17 @@ async function saveToken(){
     const u=await r.json();
     document.getElementById('gist-msg').textContent='Verbonden als '+u.login;
     setTimeout(()=>document.getElementById('gist-msg').textContent='',3000);
-    // pull latest data with this token
     const ok=await gistPull();
     if(ok)refreshAll();
     else await gistPush();
   }catch{ss('err','Token werkt niet');toast('Token werkt niet.');}
 }
 
-// ─── SETUP ───────────────────────────────────────────────────
 async function doSetup(){
   const t=document.getElementById('setup-token').value.trim();
   if(!t){document.getElementById('setup-msg').textContent='Vul token in.';return;}
+  document.getElementById('setup-msg').textContent='';
+  document.getElementById('setup-msg').style.color='var(--green)';
   document.getElementById('setup-msg').textContent='Verbinden…';
   try{
     const r=await fetch('https://api.github.com/user',{headers:{'Authorization':'token '+t}});
@@ -473,9 +469,16 @@ async function doSetup(){
     setToken(t);
     document.getElementById('setup-msg').textContent='Verbonden als '+u.login+'!';
     const ok=await gistPull();
-    if(!ok){seed();await gistPush();}
+    if(!ok){
+      // First time: Gist has no data yet → seed and push
+      seed();
+      await gistPush();
+    }
     setTimeout(()=>startApp(),500);
-  }catch{document.getElementById('setup-msg').textContent='Token werkt niet.';}
+  }catch{
+    document.getElementById('setup-msg').style.color='var(--red)';
+    document.getElementById('setup-msg').textContent='Token werkt niet.';
+  }
 }
 
 function skipSetup(){
@@ -485,7 +488,6 @@ function skipSetup(){
   ss('','Lokaal — geen sync');
 }
 
-// ─── HELPERS ─────────────────────────────────────────────────
 function toH(h,m,s=0){return h+m/60+s/3600;}
 function isTravel(p){return p==='Onderweg'||p===VERPL;}
 function nettoOf(c){return(c.brutoIncl||0)/(1+(c.btwPct||6)/100);}
@@ -511,9 +513,9 @@ function countContractDays(ym){
   return n;
 }
 
-// ─── SEED ────────────────────────────────────────────────────
+// seed() — only runs when there is truly no data yet
 function seed(){
-  if(STATE.meta.clients.length)return;
+  if(STATE.meta.clients.length || STATE.entries.length) return;
   const cid='client_cebam';
   STATE.meta.clients=[{id:cid,name:'CEBAM',color:'#1D9E75',type:'fixed',
     brutoIncl:2843.91,btwPct:6,uurdag:8,
@@ -546,7 +548,6 @@ function seed(){
   ACid=cid;
 }
 
-// ─── SIDEBAR ─────────────────────────────────────────────────
 function renderSidebar(){
   const m=STATE.meta;
   document.getElementById('client-nav').innerHTML=m.clients.map(c=>`
@@ -573,7 +574,6 @@ function refreshCurrentView(){
 }
 function refreshAll(){renderSidebar();populateProjects();refreshCurrentView();}
 
-// ─── MODALS ───────────────────────────────────────────────────
 function openModal(id){document.getElementById(id).classList.add('show');}
 function closeModal(id){document.getElementById(id).classList.remove('show');}
 function mkCP(sel){return PAL.map(c=>`<div class="co ${c===sel?'sel':''}" style="background:${c}" data-c="${c}" onclick="selC(this)"></div>`).join('');}
@@ -630,7 +630,6 @@ function deleteClient(id){
   refreshAll();schedulePush();toast('Verwijderd');
 }
 
-// ─── PROJECTS ────────────────────────────────────────────────
 function populateProjects(){
   const c=gc(ACid),ps=c?c.projects:[];
   const opts=ps.map(p=>`<option value="${p}">${p==='Onderweg'?'Onderweg (reistijd)':p}</option>`).join('');
@@ -654,7 +653,6 @@ function addProject(){
   schedulePush();toast('Toegevoegd: '+name);
 }
 
-// ─── TIMER ───────────────────────────────────────────────────
 function toggleTimer(){
   if(!tRun){
     const p=document.getElementById('t-proj').value;
@@ -680,7 +678,6 @@ function toggleTimer(){
   }
 }
 
-// ─── MANUAL ADD / DELETE ─────────────────────────────────────
 function addManual(){
   const date=document.getElementById('i-date').value,proj=document.getElementById('i-proj').value;
   const desc=document.getElementById('i-desc').value;
@@ -705,7 +702,6 @@ function deleteEntry(id){
   schedulePush();renderLog();toast('Verwijderd');
 }
 
-// ─── LOG ─────────────────────────────────────────────────────
 function renderLog(){
   const ms=months4(ACid),sel=document.getElementById('sel-log-m');
   const cur=sel.value&&ms.includes(sel.value)?sel.value:(ms[0]||'');
@@ -728,7 +724,6 @@ function renderLog(){
   body.innerHTML=html;
 }
 
-// ─── RAPPORT ─────────────────────────────────────────────────
 function renderMonthNav(){
   const ms=months4(ACid);
   if(!repMonth||!ms.includes(repMonth))repMonth=ms[0]||null;
@@ -850,7 +845,6 @@ function renderCumul(){
   document.getElementById('r-cumul').innerHTML=html+'</tbody></table>';
 }
 
-// ─── GLOBAAL ─────────────────────────────────────────────────
 function renderGlobal(){
   const meta=STATE.meta,entries=STATE.entries,refRate=meta.refRate||86.13,refLbl=meta.refLabel||'Apotheker';
   let totH=0,totInk=0;
@@ -877,7 +871,6 @@ function renderGlobal(){
   document.getElementById('g-bars').innerHTML=bh;
 }
 
-// ─── SETTINGS ────────────────────────────────────────────────
 function saveGlobal(){
   STATE.meta.refLabel=document.getElementById('s-ref-lbl').value.trim()||'Apotheker';
   STATE.meta.refRate=parseFloat(document.getElementById('s-ref-rate').value)||86.13;
@@ -927,7 +920,6 @@ function renderClientsList(){
     </div>`).join('');
 }
 
-// ─── EXPORT / IMPORT ─────────────────────────────────────────
 function exportData(){
   const blob=new Blob([JSON.stringify(STATE,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='urentracker_backup.json';a.click();toast('Geëxporteerd');
@@ -944,7 +936,6 @@ function handleImport(ev){
   };r.readAsText(file);
 }
 
-// ─── VIEW SWITCH ─────────────────────────────────────────────
 function switchView(name){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.ni[id^=nav-]').forEach(n=>n.classList.remove('active'));
@@ -956,7 +947,6 @@ function switchView(name){
   refreshCurrentView();
 }
 
-// ─── START APP ───────────────────────────────────────────────
 function startApp(){
   document.getElementById('setup-screen').style.display='none';
   document.getElementById('app').style.display='grid';
@@ -968,20 +958,22 @@ function startApp(){
   renderLog();
 }
 
-// ─── INIT ─────────────────────────────────────────────────────
+// ─── INIT — fixed: never seed when Gist data exists ──────────
 async function init(){
   const token=getToken();
   if(!token){
-    // No token yet → show setup screen
     document.getElementById('setup-screen').style.display='block';
     return;
   }
-  // Token exists → always pull from Gist first
   const ok=await gistPull();
   if(!ok){
-    // Pull failed (first time or network error) → seed + push
-    seed();
-    await gistPush();
+    // Pull failed with a valid token → show setup screen with error, do NOT seed or overwrite
+    document.getElementById('setup-screen').style.display='block';
+    const msg=document.getElementById('setup-msg');
+    msg.style.color='var(--red)';
+    msg.textContent='Kon data niet ophalen van de Gist. Controleer je verbinding en klik opnieuw op "Verbinden & starten".';
+    document.getElementById('setup-token').value=token;
+    return;
   }
   startApp();
 }
